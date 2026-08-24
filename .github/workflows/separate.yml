@@ -1,0 +1,30 @@
+name: Process queued karaoke songs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+concurrency:
+  group: stagefront-karaoke-separation
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  separate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install --disable-pip-version-check -r requirements.txt
+      - name: Process the next queued song
+        env:
+          STAGEFRONT_WORKER_URL: https://stagefront-git-karaoke-engine-v2-dtvontt-7998s-projects.vercel.app
+          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+        run: python worker.py
