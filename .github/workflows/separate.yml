@@ -25,9 +25,15 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: pip install --disable-pip-version-check -r requirements.txt
-      - name: Process the next queued song
+      - name: Separate the next queued song
         env:
           STAGEFRONT_WORKER_URL: https://stagefront-git-karaoke-engine-v2-dtvontt-7998s-projects.vercel.app
           KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python worker.py
+      - name: Transcribe the next isolated vocal track
+        env:
+          STAGEFRONT_WORKER_URL: https://stagefront-git-karaoke-engine-v2-dtvontt-7998s-projects.vercel.app
+          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: python transcribe.py
