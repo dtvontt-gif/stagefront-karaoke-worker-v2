@@ -31,11 +31,13 @@ def upload(destination: dict, path: Path) -> None:
     with path.open("rb") as audio:
         response = requests.put(
             destination["signedUrl"],
-            headers={"Content-Type": "audio/wav", "Cache-Control": "3600", "x-upsert": "false"},
-            data=audio,
+            headers={"x-upsert": "false"},
+            data={"cacheControl": "3600"},
+            files={"": (path.name, audio, "audio/wav")},
             timeout=900,
         )
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(f"Stem upload failed ({response.status_code}): {response.text[:500]}")
 
 
 def main() -> int:
