@@ -33,7 +33,7 @@ def upload(destination: dict, path: Path) -> None:
             destination["signedUrl"],
             headers={"x-upsert": "false"},
             data={"cacheControl": "3600"},
-            files={"": (path.name, audio, "audio/wav")},
+            files={"": (path.name, audio, "audio/mpeg")},
             timeout=900,
         )
     if not response.ok:
@@ -74,10 +74,18 @@ def main() -> int:
                 check=True,
             )
             stem_dir = output_root / "htdemucs" / source_path.stem
-            vocals = stem_dir / "vocals.wav"
-            instrumental = stem_dir / "no_vocals.wav"
-            if not vocals.is_file() or not instrumental.is_file():
+            vocals_wav = stem_dir / "vocals.wav"
+            instrumental_wav = stem_dir / "no_vocals.wav"
+            if not vocals_wav.is_file() or not instrumental_wav.is_file():
                 raise RuntimeError("Separator did not create both output tracks.")
+
+            vocals = work / "vocals.mp3"
+            instrumental = work / "instrumental.mp3"
+            for source, target in ((vocals_wav, vocals), (instrumental_wav, instrumental)):
+                subprocess.run(
+                    ["ffmpeg", "-v", "error", "-y", "-i", str(source), "-codec:a", "libmp3lame", "-b:a", "320k", str(target)],
+                    check=True,
+                )
 
             update(job_id, 0.8)
             upload(task["outputs"]["vocals"], vocals)
