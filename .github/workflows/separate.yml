@@ -27,4 +27,5 @@ jobs:
         env:
           STAGEFRONT_WORKER_URL: https://stagefront-git-karaoke-engine-v2-dtvontt-7998s-projects.vercel.app
           KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python worker.py

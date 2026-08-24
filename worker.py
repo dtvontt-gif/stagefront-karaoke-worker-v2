@@ -11,7 +11,10 @@ from pathlib import Path
 import requests
 
 BASE_URL = os.environ["STAGEFRONT_WORKER_URL"].rstrip("/")
-HEADERS = {"Authorization": f"Bearer {os.environ['KARAOKE_WORKER_SECRET']}"}
+HEADERS = {
+    "Authorization": f"Bearer {os.environ['KARAOKE_WORKER_SECRET']}",
+    "x-vercel-protection-bypass": os.environ["VERCEL_AUTOMATION_BYPASS_SECRET"],
+}
 
 
 def update(job_id: str, progress: float, failed: str | None = None) -> None:
