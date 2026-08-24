@@ -31,7 +31,7 @@ def upload(destination: dict, path: Path) -> None:
     with path.open("rb") as audio:
         response = requests.put(
             destination["signedUrl"],
-            headers={"Content-Type": "audio/wav", "Cache-Control": "3600"},
+            headers={"Content-Type": "audio/wav", "Cache-Control": "3600", "x-upsert": "false"},
             data=audio,
             timeout=900,
         )
