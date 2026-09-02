@@ -102,7 +102,7 @@ def main() -> int:
             update(job_id, 0.96)
             complete = requests.post(
                 f"{BASE_URL}/api/karaoke-v2/worker/render/jobs/{job_id}/complete",
-                headers=HEADERS, json={"renderSize": output.stat().st_size}, timeout=30,
+                headers=HEADERS, json={"renderSize": output.stat().st_size, "storageKey": task["output"]["path"]}, timeout=30,
             )
             complete.raise_for_status()
             print(f"Completed video render {job_id}.")
