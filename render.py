@@ -71,7 +71,8 @@ def main() -> int:
             if background_url:
                 image_suffix = Path(urlparse(background_url).path).suffix.lower()
                 background_image = work / f"background{image_suffix if image_suffix in {'.jpg', '.jpeg', '.png', '.webp'} else '.jpg'}"
-                with requests.get(background_url, stream=True, timeout=300) as source:
+                image_headers = {"x-vercel-protection-bypass": HEADERS["x-vercel-protection-bypass"]} if task["video"].get("backgroundImageIsTemplate") else None
+                with requests.get(background_url, headers=image_headers, stream=True, timeout=300) as source:
                     source.raise_for_status()
                     with background_image.open("wb") as target:
                         for chunk in source.iter_content(chunk_size=1024 * 1024):
