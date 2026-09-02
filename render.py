@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -66,17 +67,33 @@ def main() -> int:
             background = str(task["video"].get("backgroundColor", "#08080b")).lstrip("#")
             if len(background) != 6 or any(character not in "0123456789abcdefABCDEF" for character in background):
                 background = "08080b"
-            subprocess.run(
-                [
+            background_url = task["video"].get("backgroundImageUrl")
+            if background_url:
+                image_suffix = Path(urlparse(background_url).path).suffix.lower()
+                background_image = work / f"background{image_suffix if image_suffix in {'.jpg', '.jpeg', '.png', '.webp'} else '.jpg'}"
+                with requests.get(background_url, stream=True, timeout=300) as source:
+                    source.raise_for_status()
+                    with background_image.open("wb") as target:
+                        for chunk in source.iter_content(chunk_size=1024 * 1024):
+                            target.write(chunk)
+                command = [
+                    "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(background_image),
+                    "-i", str(instrumental),
+                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];[background]ass={subtitles.as_posix()}[video]",
+                    "-map", "[video]", "-map", "1:a",
+                ]
+            else:
+                command = [
                     "ffmpeg", "-v", "error", "-y",
                     "-f", "lavfi", "-i", f"color=c=0x{background}:s={width}x{height}:r=30",
                     "-i", str(instrumental),
                     "-vf", f"ass={subtitles.as_posix()}",
-                    "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart", str(output),
-                ],
-                check=True,
-            )
+                ]
+            command.extend([
+                "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart", str(output),
+            ])
+            subprocess.run(command, check=True)
             if not output.is_file() or output.stat().st_size <= 0:
                 raise RuntimeError("FFmpeg did not create the karaoke video.")
             update(job_id, 0.85)
