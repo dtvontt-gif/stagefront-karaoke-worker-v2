@@ -68,6 +68,9 @@ def main() -> int:
             if len(background) != 6 or any(character not in "0123456789abcdefABCDEF" for character in background):
                 background = "08080b"
             background_url = task["video"].get("backgroundImageUrl")
+            intro_ms = max(0, min(15000, int(task["video"].get("introDurationMs", 0))))
+            outro_ms = max(0, min(15000, int(task["video"].get("outroDurationMs", 0))))
+            audio_filter = f"[1:a]adelay={intro_ms}:all=1,apad=pad_dur={outro_ms / 1000:.3f}[audio]"
             if background_url:
                 image_suffix = Path(urlparse(background_url).path).suffix.lower()
                 background_image = work / f"background{image_suffix if image_suffix in {'.jpg', '.jpeg', '.png', '.webp'} else '.jpg'}"
@@ -80,15 +83,16 @@ def main() -> int:
                 command = [
                     "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(background_image),
                     "-i", str(instrumental),
-                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];[background]ass={subtitles.as_posix()}[video]",
-                    "-map", "[video]", "-map", "1:a",
+                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];[background]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-map", "[video]", "-map", "[audio]",
                 ]
             else:
                 command = [
                     "ffmpeg", "-v", "error", "-y",
                     "-f", "lavfi", "-i", f"color=c=0x{background}:s={width}x{height}:r=30",
                     "-i", str(instrumental),
-                    "-vf", f"ass={subtitles.as_posix()}",
+                    "-filter_complex", f"[0:v]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-map", "[video]", "-map", "[audio]",
                 ]
             command.extend([
                 "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
