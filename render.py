@@ -55,9 +55,8 @@ def main() -> int:
             instrumental = work / "instrumental.mp3"
             subtitles = work / "karaoke.ass"
             output = work / "karaoke.mp4"
-            welcome_audio = ASSET_DIR / "stagefront-welcome.wav"
-            chime_audio = ASSET_DIR / "stagefront-chime.wav"
-            if not welcome_audio.is_file() or not chime_audio.is_file():
+            intro_audio = ASSET_DIR / "stagefront-intro.wav"
+            if not intro_audio.is_file():
                 raise RuntimeError("StageFront intro audio is missing.")
             with requests.get(task["instrumental"]["url"], stream=True, timeout=900) as source:
                 source.raise_for_status()
@@ -73,13 +72,32 @@ def main() -> int:
             if len(background) != 6 or any(character not in "0123456789abcdefABCDEF" for character in background):
                 background = "08080b"
             background_url = task["video"].get("backgroundImageUrl")
+            intro_image_url = task["video"].get("introImageUrl")
             intro_ms = max(0, min(15000, int(task["video"].get("introDurationMs", 0))))
             outro_ms = max(0, min(15000, int(task["video"].get("outroDurationMs", 0))))
             audio_filter = (
                 f"[1:a]adelay={intro_ms}:all=1,apad=pad_dur={outro_ms / 1000:.3f}[music];"
-                "[2:a]volume=1.2,adelay=650:all=1[welcome];"
-                "[3:a]volume=0.7[chime];"
-                "[music][welcome][chime]amix=inputs=3:duration=longest:normalize=0[audio]"
+                "[2:a]volume=1.0[intro];"
+                "[music][intro]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.96[audio]"
+            )
+            if not intro_image_url:
+                raise RuntimeError("StageFront intro image is missing.")
+            intro_image = work / "intro.png"
+            with requests.get(
+                intro_image_url,
+                headers={"x-vercel-protection-bypass": HEADERS["x-vercel-protection-bypass"]},
+                stream=True,
+                timeout=300,
+            ) as source:
+                source.raise_for_status()
+                with intro_image.open("wb") as target:
+                    for chunk in source.iter_content(chunk_size=1024 * 1024):
+                        target.write(chunk)
+            intro_seconds = intro_ms / 1000
+            intro_overlay = (
+                f"[3:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},setsar=1,format=rgba,"
+                f"fade=t=out:st={max(0, intro_seconds - 0.65):.3f}:d=0.65:alpha=1[introvisual];"
             )
             if background_url:
                 image_suffix = Path(urlparse(background_url).path).suffix.lower()
@@ -93,8 +111,8 @@ def main() -> int:
                 command = [
                     "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(background_image),
                     "-i", str(instrumental),
-                    "-i", str(welcome_audio), "-i", str(chime_audio),
-                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];[background]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-i", str(intro_audio), "-loop", "1", "-i", str(intro_image),
+                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];{intro_overlay}[background][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
             else:
@@ -102,8 +120,8 @@ def main() -> int:
                     "ffmpeg", "-v", "error", "-y",
                     "-f", "lavfi", "-i", f"color=c=0x{background}:s={width}x{height}:r=30",
                     "-i", str(instrumental),
-                    "-i", str(welcome_audio), "-i", str(chime_audio),
-                    "-filter_complex", f"[0:v]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-i", str(intro_audio), "-loop", "1", "-i", str(intro_image),
+                    "-filter_complex", f"{intro_overlay}[0:v][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
             command.extend([
