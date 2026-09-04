@@ -148,9 +148,26 @@ def main() -> int:
                 ]
             command.extend([
                 "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart", str(output),
+                "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart",
+                "-progress", "pipe:1", "-nostats", str(output),
             ])
-            subprocess.run(command, check=True)
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)
+            assert process.stdout is not None
+            total_seconds = main_seconds + outro_seconds
+            reported_progress = 0.15
+            for line in process.stdout:
+                if not line.startswith("out_time_ms="):
+                    continue
+                try:
+                    rendered_seconds = int(line.split("=", 1)[1]) / 1_000_000
+                except ValueError:
+                    continue
+                progress = min(0.82, 0.15 + (rendered_seconds / total_seconds) * 0.67)
+                if progress >= reported_progress + 0.05:
+                    update(job_id, progress)
+                    reported_progress = progress
+            if process.wait() != 0:
+                raise subprocess.CalledProcessError(process.returncode, command)
             if not output.is_file() or output.stat().st_size <= 0:
                 raise RuntimeError("FFmpeg did not create the karaoke video.")
             update(job_id, 0.85)
