@@ -85,7 +85,10 @@ def main() -> int:
             intro_video_url = task["video"].get("introVideoUrl")
             intro_ms = max(0, min(15000, int(task["video"].get("introDurationMs", 0))))
             outro_ms = max(0, min(15000, int(task["video"].get("outroDurationMs", 0))))
-            main_seconds = (intro_ms / 1000) + media_duration(instrumental)
+            media_seconds = media_duration(instrumental)
+            requested_song_ms = task["video"].get("songDurationMs")
+            song_seconds = min(media_seconds, max(1.0, float(requested_song_ms) / 1000)) if requested_song_ms else media_seconds
+            main_seconds = (intro_ms / 1000) + song_seconds
             outro_seconds = outro_ms / 1000
             audio_filter = (
                 f"[1:a]adelay={intro_ms}:all=1,apad[music];"
