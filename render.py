@@ -72,7 +72,7 @@ def main() -> int:
             if len(background) != 6 or any(character not in "0123456789abcdefABCDEF" for character in background):
                 background = "08080b"
             background_url = task["video"].get("backgroundImageUrl")
-            intro_image_url = task["video"].get("introImageUrl")
+            intro_video_url = task["video"].get("introVideoUrl")
             intro_ms = max(0, min(15000, int(task["video"].get("introDurationMs", 0))))
             outro_ms = max(0, min(15000, int(task["video"].get("outroDurationMs", 0))))
             audio_filter = (
@@ -80,17 +80,17 @@ def main() -> int:
                 "[2:a]volume=1.0[intro];"
                 "[music][intro]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.96[audio]"
             )
-            if not intro_image_url:
-                raise RuntimeError("StageFront intro image is missing.")
-            intro_image = work / "intro.png"
+            if not intro_video_url:
+                raise RuntimeError("StageFront intro animation is missing.")
+            intro_video = work / "intro.mp4"
             with requests.get(
-                intro_image_url,
+                intro_video_url,
                 headers={"x-vercel-protection-bypass": HEADERS["x-vercel-protection-bypass"]},
                 stream=True,
                 timeout=300,
             ) as source:
                 source.raise_for_status()
-                with intro_image.open("wb") as target:
+                with intro_video.open("wb") as target:
                     for chunk in source.iter_content(chunk_size=1024 * 1024):
                         target.write(chunk)
             intro_seconds = intro_ms / 1000
@@ -111,7 +111,7 @@ def main() -> int:
                 command = [
                     "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(background_image),
                     "-i", str(instrumental),
-                    "-i", str(intro_audio), "-loop", "1", "-i", str(intro_image),
+                    "-i", str(intro_audio), "-i", str(intro_video),
                     "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];{intro_overlay}[background][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
@@ -120,7 +120,7 @@ def main() -> int:
                     "ffmpeg", "-v", "error", "-y",
                     "-f", "lavfi", "-i", f"color=c=0x{background}:s={width}x{height}:r=30",
                     "-i", str(instrumental),
-                    "-i", str(intro_audio), "-loop", "1", "-i", str(intro_image),
+                    "-i", str(intro_audio), "-i", str(intro_video),
                     "-filter_complex", f"{intro_overlay}[0:v][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
