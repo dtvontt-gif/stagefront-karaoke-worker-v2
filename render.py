@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -41,6 +42,14 @@ def upload(destination: dict, path: Path) -> None:
         raise RuntimeError(f"Video upload failed ({response.status_code}): {response.text[:500]}")
 
 
+def media_duration(path: Path) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    return float(json.loads(result.stdout)["format"]["duration"])
+
+
 def main() -> int:
     claim = requests.post(f"{BASE_URL}/api/karaoke-v2/worker/render/jobs/claim", headers=HEADERS, timeout=30)
     if claim.status_code == 204:
@@ -56,8 +65,9 @@ def main() -> int:
             subtitles = work / "karaoke.ass"
             output = work / "karaoke.mp4"
             intro_audio = ASSET_DIR / "stagefront-intro.wav"
-            if not intro_audio.is_file():
-                raise RuntimeError("StageFront intro audio is missing.")
+            outro_video = ASSET_DIR / "stagefront-outro.mp4"
+            if not intro_audio.is_file() or not outro_video.is_file():
+                raise RuntimeError("StageFront intro or outro media is missing.")
             with requests.get(task["instrumental"]["url"], stream=True, timeout=900) as source:
                 source.raise_for_status()
                 with instrumental.open("wb") as target:
@@ -75,10 +85,12 @@ def main() -> int:
             intro_video_url = task["video"].get("introVideoUrl")
             intro_ms = max(0, min(15000, int(task["video"].get("introDurationMs", 0))))
             outro_ms = max(0, min(15000, int(task["video"].get("outroDurationMs", 0))))
+            outro_start_ms = intro_ms + round(media_duration(instrumental) * 1000)
             audio_filter = (
                 f"[1:a]adelay={intro_ms}:all=1,apad=pad_dur={outro_ms / 1000:.3f}[music];"
                 "[2:a]volume=1.0[intro];"
-                "[music][intro]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.96[audio]"
+                f"[4:a]adelay={outro_start_ms}:all=1[outro];"
+                "[music][intro][outro]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.96[audio]"
             )
             if not intro_video_url:
                 raise RuntimeError("StageFront intro animation is missing.")
@@ -99,6 +111,10 @@ def main() -> int:
                 f"crop={width}:{height},setsar=1,format=rgba,"
                 f"fade=t=out:st={max(0, intro_seconds - 0.65):.3f}:d=0.65:alpha=1[introvisual];"
             )
+            outro_overlay = (
+                f"[4:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height},setsar=1,setpts=PTS+{outro_start_ms / 1000:.3f}/TB[outrovisual];"
+            )
             if background_url:
                 image_suffix = Path(urlparse(background_url).path).suffix.lower()
                 background_image = work / f"background{image_suffix if image_suffix in {'.jpg', '.jpeg', '.png', '.webp'} else '.jpg'}"
@@ -111,8 +127,8 @@ def main() -> int:
                 command = [
                     "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(background_image),
                     "-i", str(instrumental),
-                    "-i", str(intro_audio), "-i", str(intro_video),
-                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];{intro_overlay}[background][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-i", str(intro_audio), "-i", str(intro_video), "-i", str(outro_video),
+                    "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[background];{intro_overlay}[background][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[captioned];{outro_overlay}[captioned][outrovisual]overlay=eof_action=pass[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
             else:
@@ -120,8 +136,8 @@ def main() -> int:
                     "ffmpeg", "-v", "error", "-y",
                     "-f", "lavfi", "-i", f"color=c=0x{background}:s={width}x{height}:r=30",
                     "-i", str(instrumental),
-                    "-i", str(intro_audio), "-i", str(intro_video),
-                    "-filter_complex", f"{intro_overlay}[0:v][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[video];{audio_filter}",
+                    "-i", str(intro_audio), "-i", str(intro_video), "-i", str(outro_video),
+                    "-filter_complex", f"{intro_overlay}[0:v][introvisual]overlay=enable='lt(t,{intro_seconds:.3f})'[composite];[composite]ass={subtitles.as_posix()}[captioned];{outro_overlay}[captioned][outrovisual]overlay=eof_action=pass[video];{audio_filter}",
                     "-map", "[video]", "-map", "[audio]",
                 ]
             command.extend([
