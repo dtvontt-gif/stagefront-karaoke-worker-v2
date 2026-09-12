@@ -28,18 +28,18 @@ jobs:
       - name: Separate the next queued song
         env:
           STAGEFRONT_WORKER_URL: https://www.stagefrontdtv.com
-          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          KARAOKE_WORKER_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python worker.py
       - name: Transcribe the next isolated vocal track
         env:
           STAGEFRONT_WORKER_URL: https://www.stagefrontdtv.com
-          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          KARAOKE_WORKER_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python transcribe.py
       - name: Render the next karaoke video
         env:
           STAGEFRONT_WORKER_URL: https://www.stagefrontdtv.com
-          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          KARAOKE_WORKER_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python render.py
