@@ -45,7 +45,8 @@ def main() -> int:
     if claim.status_code == 204:
         print("No queued songs.")
         return 0
-    claim.raise_for_status()
+    if not claim.ok:
+        raise RuntimeError(f"Job claim failed ({claim.status_code}): {claim.text[:1000]}")
     task = claim.json()
     job_id = task["job"]["id"]
 
