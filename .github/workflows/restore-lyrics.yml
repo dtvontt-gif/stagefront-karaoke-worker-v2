@@ -1,0 +1,25 @@
+name: Restore karaoke lyric revision
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Completed transcription job whose prior revision should be restored
+        required: true
+        type: string
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore the revision before transcription
+        env:
+          STAGEFRONT_WORKER_URL: https://www.stagefrontdtv.com
+          KARAOKE_WORKER_SECRET: ${{ secrets.KARAOKE_WORKER_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST "$STAGEFRONT_WORKER_URL/api/karaoke-v2/worker/transcription/jobs/$JOB_ID/restore" \
+            -H "Authorization: Bearer $KARAOKE_WORKER_SECRET" \
+            -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET"
